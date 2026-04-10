@@ -10,7 +10,7 @@ const client = new Client({
   ]
 });
 
-const TOKEN = process.env.TOKEN;
+const TOKEN = process.env
 
 // palavras proibidas
 const badWords = ["porra", "merda", "caralho", "fdp"];
