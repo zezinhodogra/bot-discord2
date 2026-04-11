@@ -3,7 +3,6 @@ const { Client, GatewayIntentBits } = require('discord.js');
 
 const TOKEN = process.env.TOKEN;
 
-console.log("ENV TOKEN:", process.env.TOKEN); // 👈 AQUI
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -13,25 +12,17 @@ const client = new Client({
   ]
 });
 
-const TOKEN = process.env.TOKEN;
-
-// palavras proibidas
 const badWords = ["porra", "merda", "caralho", "fdp"];
 
 client.on("ready", () => {
   console.log(`Bot online como ${client.user.tag}`);
 });
 
-// BOAS VINDAS
 client.on("guildMemberAdd", async (member) => {
   const canal = member.guild.channels.cache.find(c => c.name === "bem-vindo");
-
-  if (canal) {
-    canal.send(`👋 Bem-vindo ${member} ao servidor!`);
-  }
+  if (canal) canal.send(`👋 Bem-vindo ${member}!`);
 });
 
-// MODERAÇÃO
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
@@ -41,8 +32,8 @@ client.on("messageCreate", async (message) => {
     await message.delete();
 
     try {
-      await message.member.timeout(24 * 60 * 60 * 1000, "Falou palavrão");
-      message.channel.send(`🚫 ${message.author} foi silenciado por 1 dia.`);
+      await message.member.timeout(24 * 60 * 60 * 1000, "Palavrão");
+      message.channel.send(`🚫 ${message.author} foi silenciado.`);
     } catch (err) {
       console.log("Erro:", err);
     }
