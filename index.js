@@ -1,6 +1,9 @@
 require("dotenv").config();
 const { Client, GatewayIntentBits } = require('discord.js');
 
+const TOKEN = process.env.TOKEN;
+
+console.log("ENV TOKEN:", process.env.TOKEN); // 👈 AQUI
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
