@@ -23,15 +23,15 @@ const palavrasProibidas = [
     "arrombado","otario"
 ];
 
+const LOG_CHANNEL = "logs-bot";
+
 const avisos = new Map();
 const mensagensUsuario = new Map();
-
-// nome do canal de logs
-const LOG_CHANNEL = "logs-bot";
+const niveis = new Map();
 
 // ================= FUNÇÕES =================
 
-// normalização hardcore
+// normalizar texto
 function normalizar(texto) {
     return texto
         .toLowerCase()
@@ -47,22 +47,21 @@ function normalizar(texto) {
         .replace(/\s+/g, " ");
 }
 
-// IA simples (detecção de ofensa sem palavrão)
+// IA simples de ofensa
 function detectarOfensa(msg) {
     return (
         msg.includes("vai se") ||
         msg.includes("seu lixo") ||
         msg.includes("idiota") ||
         msg.includes("burro") ||
-        msg.includes("se mata") ||
         msg.includes("lixo")
     );
 }
 
-// spam/flood
+// spam
 function detectarSpam(userId) {
     const agora = Date.now();
-    const limite = 5000; // 5s
+    const limite = 5000;
 
     if (!mensagensUsuario.has(userId)) {
         mensagensUsuario.set(userId, []);
@@ -71,24 +70,60 @@ function detectarSpam(userId) {
     const msgs = mensagensUsuario.get(userId);
     msgs.push(agora);
 
-    // remove antigas
     while (msgs.length && msgs[0] < agora - limite) {
         msgs.shift();
     }
 
-    return msgs.length >= 5; // 5 msgs em 5s
+    return msgs.length >= 5;
 }
 
-// log
+// LOG (FUNCIONA EM QUALQUER CATEGORIA)
 function log(guild, texto) {
-    const canal = guild.channels.cache.find(c => c.name === LOG_CHANNEL);
-    if (canal) canal.send(texto);
+    const canal = guild.channels.cache.find(
+        c => c.name === LOG_CHANNEL && c.isTextBased()
+    );
+
+    if (!canal) {
+        console.log("❌ Canal logs-bot não encontrado");
+        return;
+    }
+
+    canal.send(texto).catch(() => {
+        console.log("❌ Erro ao enviar log");
+    });
+}
+
+// XP
+function adicionarXP(userId) {
+    if (!niveis.has(userId)) {
+        niveis.set(userId, { xp: 0, level: 1 });
+    }
+
+    const user = niveis.get(userId);
+
+    user.xp += Math.floor(Math.random() * 10) + 5;
+
+    const xpNecessario = user.level * 100;
+
+    if (user.xp >= xpNecessario) {
+        user.xp = 0;
+        user.level++;
+        return true;
+    }
+
+    return false;
 }
 
 // ================= EVENTOS =================
 
 client.on('ready', () => {
     console.log(`🔥 Bot online: ${client.user.tag}`);
+});
+
+// cargo automático
+client.on('guildMemberAdd', (member) => {
+    const cargo = member.guild.roles.cache.find(r => r.name === "Novo jogador");
+    if (cargo) member.roles.add(cargo);
 });
 
 client.on('messageCreate', async (message) => {
@@ -99,11 +134,37 @@ client.on('messageCreate', async (message) => {
     const original = message.content;
     const msg = normalizar(original);
 
+    // ================= LEVEL =================
+
+    if (!isAdmin) {
+        const subiu = adicionarXP(message.author.id);
+
+        if (subiu) {
+            message.channel.send(`🎉 ${message.author} subiu de nível!`);
+        }
+    }
+
+    if (original === "!level") {
+        if (isAdmin) {
+            return message.reply("👑 Você é nível máximo.");
+        }
+
+        const user = niveis.get(message.author.id);
+
+        if (!user) {
+            return message.reply("Você ainda não tem nível.");
+        }
+
+        return message.reply(`📊 Level: ${user.level} | XP: ${user.xp}`);
+    }
+
+    // ================= MODERAÇÃO =================
+
     const temPalavra = palavrasProibidas.some(p => msg.includes(p));
     const ofensaIA = detectarOfensa(msg);
     const spam = detectarSpam(message.author.id);
 
-    // ================= ADMIN =================
+    // ADMIN (só aviso)
     if (isAdmin) {
         if (temPalavra || ofensaIA) {
             await message.delete().catch(()=>{});
@@ -112,8 +173,7 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
-    // ================= MEMBROS =================
-
+    // MEMBROS
     if (temPalavra || ofensaIA || spam) {
 
         await message.delete().catch(()=>{});
@@ -122,23 +182,22 @@ client.on('messageCreate', async (message) => {
         avisos.set(id, (avisos.get(id) || 0) + 1);
         const total = avisos.get(id);
 
-        // log
-        log(message.guild, `🚨 ${message.author.tag} | Aviso ${total}`);
-
-        // resposta
         message.channel.send(`🚫 ${message.author}, aviso ${total}/3`);
 
-        // punições
+        log(message.guild, `🚨 ${message.author.tag} | Aviso ${total}`);
+
+        // spam = mute direto
         if (spam) {
-            await message.member.timeout(60 * 60 * 1000); // 1h
+            await message.member.timeout(60 * 60 * 1000);
             message.channel.send(`🔇 ${message.author} mutado por spam (1h)`);
             log(message.guild, `🔇 ${message.author.tag} mutado por SPAM`);
             avisos.set(id, 0);
             return;
         }
 
+        // 3 avisos = mute
         if (total >= 3) {
-            await message.member.timeout(60 * 60 * 1000); // 1h
+            await message.member.timeout(60 * 60 * 1000);
             message.channel.send(`🔇 ${message.author} mutado por 1 hora.`);
             log(message.guild, `🔇 ${message.author.tag} mutado (3 avisos)`);
             avisos.set(id, 0);
