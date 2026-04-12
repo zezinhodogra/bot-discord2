@@ -42,17 +42,7 @@ const palavroes = [
     "puto",
     "filho da puta",
     "filha da puta",
-    "arrombado",
-    "cu",
-    "vai tomar no cu",
-    "vai se fuder",
-    "vai se foder",
-    "fuder",
-    "foder",
-    "puta que pario",
-    "puta merda",
-    "pariu",
-    "pario"
+    "arrombado"
 ];
 
 // ========================
@@ -61,14 +51,9 @@ const palavroes = [
 let levels = {};
 
 // ========================
-// 🎉 BEM VINDO
+// ⏱ ANTI-SPAM
 // ========================
-client.on("guildMemberAdd", member => {
-    const canal = member.guild.channels.cache.find(c => c.name === "bem-vindo");
-    if (!canal) return;
-
-    canal.send(`🎉 Bem-vindo ${member}! Aproveite o servidor 🚀`);
-});
+let cooldown = {}; // userId: timestamp
 
 // ========================
 // 💬 EVENTO PRINCIPAL
@@ -77,9 +62,12 @@ client.on("messageCreate", async (message) => {
     if (message.author.bot) return;
 
     const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
+    const userId = message.author.id;
+
+    const logChannel = message.guild.channels.cache.find(c => c.name === "logs-bot");
 
     // ========================
-    // 📢 ANÚNCIO (só ADM)
+    // 📢 ANÚNCIO
     // ========================
     if (message.content.startsWith("!anuncio")) {
         if (!isAdmin) return;
@@ -95,48 +83,55 @@ client.on("messageCreate", async (message) => {
     // 📊 LEVEL
     // ========================
     if (message.content === "!level") {
-        const userId = message.author.id;
-
-        if (!levels[userId]) {
-            levels[userId] = { xp: 0, level: 1 };
-        }
-
-        message.reply(`📊 Nível: ${levels[userId].level}`);
-        return;
+        if (!levels[userId]) levels[userId] = { xp: 0, level: 1 };
+        return message.reply(`📊 Nível: ${levels[userId].level}`);
     }
 
     // ========================
-    // 🚫 ANTI-PALAVRÃO (SÓ MEMBRO)
+    // 🚫 ANTI-SPAM (MEMBROS)
+    // ========================
+    if (!isAdmin) {
+        const agora = Date.now();
+
+        if (cooldown[userId] && agora - cooldown[userId] < 10000) {
+            await message.delete().catch(() => {});
+
+            if (logChannel) {
+                logChannel.send(`⚠️ SPAM: ${message.author.tag}`);
+            }
+
+            return;
+        }
+
+        cooldown[userId] = agora;
+    }
+
+    // ========================
+    // 🚫 PALAVRÃO → TIMEOUT 1H
     // ========================
     if (!isAdmin) {
         const textoNormal = normalizar(message.content);
 
         if (palavroes.some(p => textoNormal.includes(p))) {
+            await message.delete().catch(() => {});
 
-            // 💀 BAN 1 HORA
-            await message.guild.members.ban(message.author.id, {
-                reason: "Palavrão proibido"
-            }).catch(() => {});
+            // ⏱ timeout (1 hora)
+            await message.member.timeout(60 * 60 * 1000, "Palavrão").catch(() => {});
 
-            message.channel.send(`🚨 ${message.author.tag} foi banido por 1 hora.`);
+            message.channel.send(`🚨 ${message.author} foi silenciado por 1 hora.`);
 
-            // ⏱ DESBAN APÓS 1H
-            setTimeout(async () => {
-                await message.guild.members.unban(message.author.id).catch(() => {});
-            }, 60 * 60 * 1000);
+            if (logChannel) {
+                logChannel.send(`🚨 PALAVRÃO: ${message.author.tag} → timeout 1h`);
+            }
 
             return;
         }
     }
 
     // ========================
-    // 📈 LEVEL UP
+    // 📈 LEVELS
     // ========================
-    const userId = message.author.id;
-
-    if (!levels[userId]) {
-        levels[userId] = { xp: 0, level: 1 };
-    }
+    if (!levels[userId]) levels[userId] = { xp: 0, level: 1 };
 
     if (!isAdmin) {
         levels[userId].xp += 10;
@@ -149,15 +144,6 @@ client.on("messageCreate", async (message) => {
         }
     } else {
         levels[userId].level = 999;
-    }
-
-    // ========================
-    // 📜 LOGS
-    // ========================
-    const logChannel = message.guild.channels.cache.find(c => c.name === "logs-bot");
-
-    if (logChannel) {
-        logChannel.send(`📜 ${message.author.tag}: ${message.content}`);
     }
 });
 
