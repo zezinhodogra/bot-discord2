@@ -15,8 +15,8 @@ const client = new Client({
 // ⚙️ CONFIG
 // ========================
 const LOG_CHANNEL = "logs-bot";
-const COOLDOWN_TIME = 10000; // 10s
-const TIMEOUT_TIME = 60 * 60 * 1000; // 1h
+const COOLDOWN_TIME = 10000;
+const TIMEOUT_TIME = 60 * 60 * 1000;
 
 // ========================
 // 🧠 NORMALIZAR TEXTO
@@ -35,7 +35,7 @@ function normalizar(texto) {
 }
 
 // ========================
-// 🚫 PALAVRÕES (normalizados)
+// 🚫 PALAVRÕES
 // ========================
 const palavroes = [
     "merda","caralho","desgracado","puta","puto",
@@ -49,10 +49,27 @@ const palavroes = [
 ];
 
 // ========================
-// 📊 LEVEL + COOLDOWN
+// 📊 LEVEL + SPAM
 // ========================
 const levels = {};
 const cooldown = {};
+
+// ========================
+// ⏱ CONVERTER TEMPO
+// ========================
+function parseTempo(texto) {
+    const match = texto.match(/(\d+)(m|h|d)/);
+    if (!match) return null;
+
+    const valor = parseInt(match[1]);
+    const tipo = match[2];
+
+    if (tipo === "m") return valor * 60 * 1000;
+    if (tipo === "h") return valor * 60 * 60 * 1000;
+    if (tipo === "d") return valor * 24 * 60 * 60 * 1000;
+
+    return null;
+}
 
 // ========================
 // 🔥 BOT ONLINE
@@ -79,19 +96,19 @@ client.on("messageCreate", async (message) => {
         if (!isAdmin) return;
 
         const texto = message.content.slice(9).trim();
-        if (!texto) return message.reply("Escreva algo para anunciar.");
+        if (!texto) return message.reply("Escreva algo.");
 
         message.channel.send(`📢 **ANÚNCIO**\n${texto}`);
 
         if (logChannel) {
-            logChannel.send(`📢 Anúncio feito por ${message.author.tag}`);
+            logChannel.send(`📢 Anúncio: ${message.author.tag}`);
         }
 
         return;
     }
 
     // ========================
-    // 📊 COMANDO LEVEL
+    // 📊 LEVEL
     // ========================
     if (message.content === "!level") {
         if (!levels[userId]) levels[userId] = { xp: 0, level: 1 };
@@ -119,20 +136,19 @@ client.on("messageCreate", async (message) => {
     }
 
     // ========================
-    // 🚫 PALAVRÃO → TIMEOUT
+    // 🚫 PALAVRÃO
     // ========================
     if (!isAdmin) {
         const textoNormal = normalizar(message.content);
 
         if (palavroes.some(p => textoNormal.includes(p))) {
             await message.delete().catch(() => {});
+            await message.member.timeout(TIMEOUT_TIME, "Palavrão").catch(() => {});
 
-            await message.member.timeout(TIMEOUT_TIME, "Linguagem inadequada").catch(() => {});
-
-            message.channel.send(`🚨 ${message.author}, você foi silenciado por 1 hora.`);
+            message.channel.send(`🚨 ${message.author}, silenciado por 1 hora.`);
 
             if (logChannel) {
-                logChannel.send(`🚨 PALAVRÃO: ${message.author.tag} → timeout 1h`);
+                logChannel.send(`🚨 PALAVRÃO: ${message.author.tag}`);
             }
 
             return;
@@ -140,7 +156,51 @@ client.on("messageCreate", async (message) => {
     }
 
     // ========================
-    // 📈 SISTEMA DE LEVEL
+    // 🚨 PUNIR
+    // ========================
+    if (message.content.startsWith("!punir")) {
+        if (!isAdmin) return;
+
+        const args = message.content.split(" ");
+        const user = message.mentions.members.first();
+        const tempoTexto = args[2] || "1h";
+
+        if (!user) return message.reply("Marca alguém.");
+
+        const tempo = parseTempo(tempoTexto);
+        if (!tempo) return message.reply("Use: 10m, 1h ou 1d");
+
+        await user.timeout(tempo, "Punição manual").catch(() => {});
+        message.channel.send(`🚨 ${user.user.tag} punido por ${tempoTexto}`);
+
+        if (logChannel) {
+            logChannel.send(`🚨 PUNIÇÃO: ${user.user.tag} | ${tempoTexto}`);
+        }
+
+        return;
+    }
+
+    // ========================
+    // ✅ DESPUNIR
+    // ========================
+    if (message.content.startsWith("!despunir")) {
+        if (!isAdmin) return;
+
+        const user = message.mentions.members.first();
+        if (!user) return message.reply("Marca alguém.");
+
+        await user.timeout(null).catch(() => {});
+        message.channel.send(`✅ ${user.user.tag} despunido`);
+
+        if (logChannel) {
+            logChannel.send(`✅ DESPUNIÇÃO: ${user.user.tag}`);
+        }
+
+        return;
+    }
+
+    // ========================
+    // 📈 LEVEL SYSTEM
     // ========================
     if (!levels[userId]) levels[userId] = { xp: 0, level: 1 };
 
@@ -151,7 +211,7 @@ client.on("messageCreate", async (message) => {
             levels[userId].xp = 0;
             levels[userId].level++;
 
-            message.channel.send(`🎉 ${message.author} subiu para nível ${levels[userId].level}!`);
+            message.channel.send(`🎉 ${message.author} subiu para nível ${levels[userId].level}`);
         }
     } else {
         levels[userId].level = 999;
