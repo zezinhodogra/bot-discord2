@@ -11,29 +11,49 @@ const client = new Client({
     ]
 });
 
+// Lista de palavrões (pode editar)
+const palavrasProibidas = [
+    "porra",
+    "caralho",
+    "fdp",
+    "puta",
+    "merda"
+];
+
 // Quando o bot liga
 client.on('ready', () => {
     console.log(`✅ Logado como ${client.user.tag}`);
 });
 
-// Quando alguém entra no servidor
+// Cargo automático
 client.on('guildMemberAdd', (member) => {
     const cargo = member.guild.roles.cache.find(r => r.name === "Novo jogador");
 
     if (cargo) {
         member.roles.add(cargo);
-        console.log(`Cargo dado para ${member.user.tag}`);
-    } else {
-        console.log("❌ Cargo 'Novo jogador' não encontrado");
     }
 });
 
-// Comando simples
-client.on('messageCreate', (message) => {
-    if (message.content === '!ping') {
+// Mensagens
+client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+
+    const msg = message.content.toLowerCase();
+
+    // FILTRO DE PALAVRÃO
+    if (palavrasProibidas.some(p => msg.includes(p))) {
+        await message.delete();
+
+        message.channel.send(`🚫 ${message.author}, sem palavrão aqui!`);
+
+        return;
+    }
+
+    // Comando
+    if (msg === '!ping') {
         message.reply('Pong 🏓');
     }
 });
 
-// LOGIN (IMPORTANTE)
+// Login
 client.login(process.env.TOKEN);
