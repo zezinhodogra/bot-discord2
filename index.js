@@ -11,9 +11,12 @@ const client = new Client({
     ]
 });
 
-client.once("ready", () => {
-    console.log(`🔥 Bot online como ${client.user.tag}`);
-});
+// ========================
+// ⚙️ CONFIG
+// ========================
+const LOG_CHANNEL = "logs-bot";
+const COOLDOWN_TIME = 10000; // 10s
+const TIMEOUT_TIME = 60 * 60 * 1000; // 1h
 
 // ========================
 // 🧠 NORMALIZAR TEXTO
@@ -32,68 +35,31 @@ function normalizar(texto) {
 }
 
 // ========================
-// 🚫 PALAVRÕES
+// 🚫 PALAVRÕES (normalizados)
 // ========================
 const palavroes = [
-    "merda",
-    "caralho",
-    "desgracado",
-    "puta",
-    "puto",
-    "filho da puta",
-    "filha da puta",
-    "arrombado",
-    "preto",
-    "macaco",
-    "gay",
-    "viado",
-    "bixa",
-    "bicha",
-    "bicho",
-    "boiola",
-    "LGBT",
-    "Boquete",
-    "Foder",
-    "foda-se",
-    "nem fodendo",
-    "pau",
-    "pica",
-    "punheta",
-    "trepar",
-    "buceta",
-    "xoxota",
-    "chochota",
-    "Sirica",
-    "Cacete",
-    "Caceta",
-    "Babaca",
-    "Brocha",
-    "Cracudo",
-    "Galinha",
-    "Piranha",
-    "Corno",
-    "Cachorro",
-    "Cachorra",
-    "Canalha",
-    "Escrota",
-    "Escroto",
-    "Trouxa",
-    "Vaca",
-    "Capeta",
-    "Demônio",
-    "Demonio"
-
+    "merda","caralho","desgracado","puta","puto",
+    "filho da puta","filha da puta","arrombado",
+    "viado","bixa","bicha","boiola",
+    "foder","foda se","nem fodendo",
+    "pau","pica","punheta","trepar",
+    "buceta","xoxota","sirica",
+    "cacete","babaca","brocha","corno",
+    "canalha","escroto","trouxa","vaca"
 ];
 
 // ========================
-// 📊 LEVEL
+// 📊 LEVEL + COOLDOWN
 // ========================
-let levels = {};
+const levels = {};
+const cooldown = {};
 
 // ========================
-// ⏱ ANTI-SPAM
+// 🔥 BOT ONLINE
 // ========================
-let cooldown = {}; // userId: timestamp
+client.once("ready", () => {
+    console.log(`🔥 Bot online como ${client.user.tag}`);
+});
 
 // ========================
 // 💬 EVENTO PRINCIPAL
@@ -104,7 +70,7 @@ client.on("messageCreate", async (message) => {
     const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
     const userId = message.author.id;
 
-    const logChannel = message.guild.channels.cache.find(c => c.name === "logs-bot");
+    const logChannel = message.guild.channels.cache.find(c => c.name === LOG_CHANNEL);
 
     // ========================
     // 📢 ANÚNCIO
@@ -113,27 +79,33 @@ client.on("messageCreate", async (message) => {
         if (!isAdmin) return;
 
         const texto = message.content.slice(9).trim();
-        if (!texto) return;
+        if (!texto) return message.reply("Escreva algo para anunciar.");
 
         message.channel.send(`📢 **ANÚNCIO**\n${texto}`);
+
+        if (logChannel) {
+            logChannel.send(`📢 Anúncio feito por ${message.author.tag}`);
+        }
+
         return;
     }
 
     // ========================
-    // 📊 LEVEL
+    // 📊 COMANDO LEVEL
     // ========================
     if (message.content === "!level") {
         if (!levels[userId]) levels[userId] = { xp: 0, level: 1 };
-        return message.reply(`📊 Nível: ${levels[userId].level}`);
+
+        return message.reply(`📊 Nível: ${levels[userId].level} | XP: ${levels[userId].xp}/100`);
     }
 
     // ========================
-    // 🚫 ANTI-SPAM (MEMBROS)
+    // 🚫 ANTI-SPAM
     // ========================
     if (!isAdmin) {
         const agora = Date.now();
 
-        if (cooldown[userId] && agora - cooldown[userId] < 10000) {
+        if (cooldown[userId] && agora - cooldown[userId] < COOLDOWN_TIME) {
             await message.delete().catch(() => {});
 
             if (logChannel) {
@@ -147,7 +119,7 @@ client.on("messageCreate", async (message) => {
     }
 
     // ========================
-    // 🚫 PALAVRÃO → TIMEOUT 1H
+    // 🚫 PALAVRÃO → TIMEOUT
     // ========================
     if (!isAdmin) {
         const textoNormal = normalizar(message.content);
@@ -155,10 +127,9 @@ client.on("messageCreate", async (message) => {
         if (palavroes.some(p => textoNormal.includes(p))) {
             await message.delete().catch(() => {});
 
-            // ⏱ timeout (1 hora)
-            await message.member.timeout(60 * 60 * 1000, "Palavrão").catch(() => {});
+            await message.member.timeout(TIMEOUT_TIME, "Linguagem inadequada").catch(() => {});
 
-            message.channel.send(`🚨 ${message.author} foi silenciado por 1 hora.`);
+            message.channel.send(`🚨 ${message.author}, você foi silenciado por 1 hora.`);
 
             if (logChannel) {
                 logChannel.send(`🚨 PALAVRÃO: ${message.author.tag} → timeout 1h`);
@@ -169,7 +140,7 @@ client.on("messageCreate", async (message) => {
     }
 
     // ========================
-    // 📈 LEVELS
+    // 📈 SISTEMA DE LEVEL
     // ========================
     if (!levels[userId]) levels[userId] = { xp: 0, level: 1 };
 
@@ -180,11 +151,14 @@ client.on("messageCreate", async (message) => {
             levels[userId].xp = 0;
             levels[userId].level++;
 
-            message.channel.send(`🎉 ${message.author} subiu para nível ${levels[userId].level}`);
+            message.channel.send(`🎉 ${message.author} subiu para nível ${levels[userId].level}!`);
         }
     } else {
         levels[userId].level = 999;
     }
 });
 
+// ========================
+// 🚀 LOGIN
+// ========================
 client.login(process.env.TOKEN);
