@@ -5,9 +5,9 @@ const { Client, GatewayIntentBits, PermissionsBitField } = require("discord.js")
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers, // IMPORTANTE PRO BEM VINDO
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.MessageContent
     ]
 });
 
@@ -16,55 +16,56 @@ client.once("ready", () => {
 });
 
 // ========================
-// 🚫 PALAVRÕES
-// ========================
-const palavroes = [
-    "fuder",
-    "fudido",
-    "carai",
-    "bosta",
-    "cu",
-    "vai se fuder",
-    "vai tomar no cu"
-];
-
-// ========================
-// 🧠 LEVEL SYSTEM (MEMÓRIA)
+// 📊 LEVEL
 // ========================
 let levels = {};
 
 // ========================
-// 💬 EVENTO PRINCIPAL
+// 🚫 PALAVRÕES
+// ========================
+const palavroes = [
+    "fuder", "fudido", "carai", "bosta", "cu",
+    "vai se fuder", "vai tomar no cu"
+];
+
+// ========================
+// 🎉 BEM VINDO
+// ========================
+client.on("guildMemberAdd", member => {
+    const canal = member.guild.channels.cache.find(c => c.name === "bem-vindo");
+
+    if (!canal) return;
+
+    canal.send(`🎉 Bem-vindo ${member} ao servidor! Aproveite! 🚀`);
+});
+
+// ========================
+// 💬 EVENTO
 // ========================
 client.on("messageCreate", async (message) => {
     if (message.author.bot) return;
 
-    // ========================
-    // 👑 ADMIN IGNORADO (LIBERADO PRA TUDO)
-    // ========================
     const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
 
     // ========================
-    // 📢 COMANDO ANÚNCIO (ANTES DE TUDO)
+    // 📢 ANÚNCIO
     // ========================
     if (message.content.startsWith("!anuncio")) {
-        if (!isAdmin) {
-            return message.reply("❌ Só admins podem usar isso.");
-        }
+        if (!isAdmin) return message.reply("❌ Só admin.");
 
         const texto = message.content.slice(9).trim();
-        if (!texto) return message.reply("❌ Escreva o anúncio.");
+        if (!texto) return message.reply("❌ Escreva algo.");
 
         message.channel.send(`📢 **ANÚNCIO**\n${texto}`);
         return;
     }
 
     // ========================
-    // 📊 COMANDO LEVEL
+    // 📊 LEVEL COMANDO
     // ========================
     if (message.content === "!level") {
         if (message.channel.name !== "sistema-de-níveis") {
-            return message.reply("❌ Use esse comando no canal #sistema-de-níveis");
+            return message.reply("❌ Use no canal correto.");
         }
 
         const userId = message.author.id;
@@ -73,26 +74,26 @@ client.on("messageCreate", async (message) => {
             levels[userId] = { xp: 0, level: 1 };
         }
 
-        message.reply(`📊 Seu nível: ${levels[userId].level} | XP: ${levels[userId].xp}`);
+        message.reply(`📊 Nível: ${levels[userId].level} | XP: ${levels[userId].xp}`);
         return;
     }
 
     // ========================
-    // 🚫 ANTI-PALAVRÃO (IGNORA ADMIN)
+    // 🚫 PALAVRÃO
     // ========================
     if (!isAdmin) {
         const texto = message.content.toLowerCase();
 
         if (palavroes.some(p => texto.includes(p))) {
             await message.delete().catch(() => {});
-            message.channel.send(`🚫 ${message.author}, sem palavrão aqui!`)
+            message.channel.send(`🚫 ${message.author}, sem palavrão!`)
                 .then(msg => setTimeout(() => msg.delete(), 3000));
             return;
         }
     }
 
     // ========================
-    // 📈 SISTEMA DE LEVEL
+    // 📈 LEVEL UP
     // ========================
     const userId = message.author.id;
 
@@ -101,7 +102,7 @@ client.on("messageCreate", async (message) => {
     }
 
     if (isAdmin) {
-        levels[userId].level = 999; // ADMIN MAX
+        levels[userId].level = 999;
         return;
     }
 
@@ -112,6 +113,15 @@ client.on("messageCreate", async (message) => {
         levels[userId].level++;
 
         message.channel.send(`🎉 ${message.author} subiu para o nível ${levels[userId].level}!`);
+    }
+
+    // ========================
+    // 📜 LOGS (canal logs-bot)
+    // ========================
+    const logChannel = message.guild.channels.cache.find(c => c.name === "logs-bot");
+
+    if (logChannel) {
+        logChannel.send(`📜 ${message.author.tag} falou: ${message.content}`);
     }
 });
 
